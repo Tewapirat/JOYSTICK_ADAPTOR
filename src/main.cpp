@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <IBusBM.h>
+#include <Wire.h>
+#include <Adafruit_PWMServoDriver.h>
 
 // =============================
 //  ประกาศตัวแปรและโครงสร้าง
@@ -15,9 +17,11 @@ typedef struct {
 
 static IBusData_t ibusData;  // ตัวเก็บค่าช่องที่อ่านได้ล่าสุด
 
-// พินสำหรับ LED ทั้งสองดวง (ปรับตาม GPIO ที่คุณใช้)
-#define LED1_PIN 26    // LED 1
-#define LED2_PIN 27    // LED 2
+// ช่องสัญญาณ PCA9685 สำหรับ LED ทั้งสองดวง
+#define LED1_CHANNEL 0    // LED 1
+#define LED2_CHANNEL 1    // LED 2
+
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
 // ฟังก์ชันช่วยแม็ปค่า PWM ให้เป็นทิศทาง (-1, 0, +1)
 static int mapDirection(int val) {
@@ -47,12 +51,12 @@ void setup() {
   // เริ่มต้นไลบรารี IBus บน Serial2, packet length = 1
   ibus.begin(Serial2, 1);
 
-  // ---------- ตั้งค่า GPIO สำหรับ LED ----------
-  pinMode(LED1_PIN, OUTPUT);
-  pinMode(LED2_PIN, OUTPUT);
+  // ---------- เริ่มต้นไลบรารี PCA9685 สำหรับ LED ----------
+  pwm.begin();
+  pwm.setPWMFreq(1000); // กำหนดความถี่สำหรับควบคุม LED
 
-  digitalWrite(LED1_PIN, LOW);
-  digitalWrite(LED2_PIN, LOW);
+  pwm.setPWM(LED1_CHANNEL, 0, 0);
+  pwm.setPWM(LED2_CHANNEL, 0, 0);
 
   // ---------- สร้าง FreeRTOS Task ----------
   xTaskCreatePinnedToCore(
@@ -123,22 +127,22 @@ void taskControlLED(void* pvParameters) {
         blinkState = !blinkState;
         lastBlink = millis();
       }
-      digitalWrite(LED1_PIN, blinkState ? HIGH : LOW);
-      digitalWrite(LED2_PIN, blinkState ? LOW : HIGH);
+      pwm.setPWM(LED1_CHANNEL, 0, blinkState ? 4095 : 0);
+      pwm.setPWM(LED2_CHANNEL, 0, blinkState ? 0 : 4095);
     } else if (dir3 == -1) {
-      digitalWrite(LED1_PIN, LOW);
-      digitalWrite(LED2_PIN, LOW);
+      pwm.setPWM(LED1_CHANNEL, 0, 0);
+      pwm.setPWM(LED2_CHANNEL, 0, 0);
     } else {
       if (dir1 == 1) {
-        digitalWrite(LED1_PIN, HIGH);
+        pwm.setPWM(LED1_CHANNEL, 0, 4095);
       } else {
-        digitalWrite(LED1_PIN, LOW);
+        pwm.setPWM(LED1_CHANNEL, 0, 0);
       }
 
       if (dir2 == 1) {
-        digitalWrite(LED2_PIN, HIGH);
+        pwm.setPWM(LED2_CHANNEL, 0, 4095);
       } else {
-        digitalWrite(LED2_PIN, LOW);
+        pwm.setPWM(LED2_CHANNEL, 0, 0);
       }
     }
 
