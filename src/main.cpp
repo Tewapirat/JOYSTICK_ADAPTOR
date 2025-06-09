@@ -117,8 +117,14 @@ void taskControlLED(void* pvParameters) {
     int dir3 = mapDirection(ibusData.ch[2]);
 
     if (dir3 == 1) {
-      digitalWrite(LED1_PIN, HIGH);
-      digitalWrite(LED2_PIN, HIGH);
+      static bool blinkState = false;
+      static unsigned long lastBlink = 0;
+      if (millis() - lastBlink >= 500) {
+        blinkState = !blinkState;
+        lastBlink = millis();
+      }
+      digitalWrite(LED1_PIN, blinkState ? HIGH : LOW);
+      digitalWrite(LED2_PIN, blinkState ? LOW : HIGH);
     } else if (dir3 == -1) {
       digitalWrite(LED1_PIN, LOW);
       digitalWrite(LED2_PIN, LOW);
