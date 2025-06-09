@@ -155,7 +155,7 @@ void taskControlLED(void* pvParameters) {
   for (;;) {
     int dir1 = mapDirection(ibusData.ch[0]);
     int dir2 = mapDirection(ibusData.ch[1]);
-    int dir3 = mapDirection(ibusData.ch[2]);
+    int dir3 = mapDirection(ibusData.ch[5]);
 
     switch (currentMode) {
       case MODE_MANUAL:
