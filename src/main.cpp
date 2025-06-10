@@ -17,17 +17,18 @@ typedef struct {
 
 static IBusData_t ibusData;  // ตัวเก็บค่าช่องที่อ่านได้ล่าสุด
 
-// ช่องสัญญาณ PCA9685 สำหรับ LED ทั้งห้าดวง
-#define LED1_CHANNEL 0    // LED 1
-#define LED2_CHANNEL 1    // LED 2
-#define LED3_CHANNEL 2    // LED 3
-#define LED4_CHANNEL 3    // LED 4
-#define LED5_CHANNEL 4    // LED 5
+// ช่องสัญญาณ PCA9685 สำหรับ Servo
+#define SERVO1_CHANNEL 0   // Servo 1
+#define SERVO2_CHANNEL 1   // Servo 2
+#define SERVO3_CHANNEL 2   // Servo 3
+#define SERVO4_CHANNEL 3   // Servo 4
+
+// ค่าพัลส์สำหรับมุมต่ำสุดและสูงสุดของ Servo
+#define SERVO_MIN 150
+#define SERVO_MAX 600
+#define SERVO_CENTER ((SERVO_MIN + SERVO_MAX) / 2)
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
-
-#define LED_ON  4095
-#define LED_OFF 0
 
 // โหมดการทำงานของระบบ
 enum Mode {
@@ -37,7 +38,6 @@ enum Mode {
 };
 
 static Mode currentMode = MODE_MANUAL;
-static bool led5Blink = false;  // ควบคุมการกระพริบของ LED5
 
 // ฟังก์ชันช่วยแม็ปค่า PWM ให้เป็นทิศทาง (-1, 0, +1)
 static int mapDirection(int val) {
@@ -50,8 +50,7 @@ static int mapDirection(int val) {
 //  ยืนยัน FreeRTOS Task โปรโตไทป์
 // =============================
 void taskReadIBus(void* pvParameters);
-void taskControlLED(void* pvParameters);
-void taskFlashLED5(void* pvParameters);
+void taskControlServo(void* pvParameters);
 
 // =============================
 //  ฟังก์ชัน setup()
@@ -68,19 +67,17 @@ void setup() {
   // เริ่มต้นไลบรารี IBus บน Serial2, packet length = 1
   ibus.begin(Serial2, 1);
 
-  // ---------- เริ่มต้นไลบรารี PCA9685 สำหรับ LED ----------
+  // ---------- เริ่มต้นไลบรารี PCA9685 สำหรับ Servo ----------
   pwm.begin();
-  pwm.setPWMFreq(1000); // กำหนดความถี่สำหรับควบคุม LED
+  pwm.setPWMFreq(50); // กำหนดความถี่สำหรับควบคุม Servo
 
-  // ตั้งค่า LED ทั้งหมดดับก่อนและเปิด LED5 ค้างสำหรับโหมด manual
-  pwm.setPWM(LED1_CHANNEL, 0, LED_OFF);
-  pwm.setPWM(LED2_CHANNEL, 0, LED_OFF);
-  pwm.setPWM(LED3_CHANNEL, 0, LED_OFF);
-  pwm.setPWM(LED4_CHANNEL, 0, LED_OFF);
-  pwm.setPWM(LED5_CHANNEL, 0, LED_ON);
+  // ตั้งค่า Servo ให้อยู่กึ่งกลางทั้งหมดเมื่อเริ่มต้น
+  pwm.setPWM(SERVO1_CHANNEL, 0, SERVO_CENTER);
+  pwm.setPWM(SERVO2_CHANNEL, 0, SERVO_CENTER);
+  pwm.setPWM(SERVO3_CHANNEL, 0, SERVO_CENTER);
+  pwm.setPWM(SERVO4_CHANNEL, 0, SERVO_CENTER);
 
   currentMode = MODE_MANUAL;
-  led5Blink = false;
 
   // ---------- สร้าง FreeRTOS Task ----------
   xTaskCreatePinnedToCore(
@@ -94,19 +91,9 @@ void setup() {
   );
 
   xTaskCreatePinnedToCore(
-    taskControlLED,
-    "LED_Task",
+    taskControlServo,
+    "SERVO_Task",
     3072,
-    NULL,
-    1,
-    NULL,
-    1
-  );
-
-  xTaskCreatePinnedToCore(
-    taskFlashLED5,
-    "FLASH_Task",
-    2048,
     NULL,
     1,
     NULL,
@@ -144,9 +131,9 @@ void taskReadIBus(void* pvParameters) {
 }
 
 // ====================================================
-//  ฟังก์ชัน Task ควบคุม LED (taskControlLED)
+//  ฟังก์ชัน Task ควบคุม Servo (taskControlServo)
 // ====================================================
-void taskControlLED(void* pvParameters) {
+void taskControlServo(void* pvParameters) {
   (void)pvParameters;
 
   static uint8_t autoStep = 0;           // ขั้นตอนของ state machine ในโหมด AUTO
@@ -159,13 +146,12 @@ void taskControlLED(void* pvParameters) {
 
     switch (currentMode) {
       case MODE_MANUAL:
-        led5Blink = false;
-        pwm.setPWM(LED5_CHANNEL, 0, LED_ON);
-
-        pwm.setPWM(LED1_CHANNEL, 0, (dir1 == 1) ? LED_ON : LED_OFF);
-        pwm.setPWM(LED2_CHANNEL, 0, (dir1 == -1) ? LED_ON : LED_OFF);
-        pwm.setPWM(LED3_CHANNEL, 0, (dir2 == 1) ? LED_ON : LED_OFF);
-        pwm.setPWM(LED4_CHANNEL, 0, (dir2 == -1) ? LED_ON : LED_OFF);
+        pwm.setPWM(SERVO1_CHANNEL, 0,
+                   (dir1 == 1) ? SERVO_MAX : (dir1 == -1) ? SERVO_MIN : SERVO_CENTER);
+        pwm.setPWM(SERVO2_CHANNEL, 0,
+                   (dir2 == 1) ? SERVO_MAX : (dir2 == -1) ? SERVO_MIN : SERVO_CENTER);
+        pwm.setPWM(SERVO3_CHANNEL, 0, SERVO_CENTER);
+        pwm.setPWM(SERVO4_CHANNEL, 0, SERVO_CENTER);
 
         if (dir3 == 1) {
           currentMode = MODE_AUTO_WAIT;
@@ -174,11 +160,10 @@ void taskControlLED(void* pvParameters) {
         break;
 
       case MODE_AUTO_WAIT:
-        led5Blink = true;
-        pwm.setPWM(LED1_CHANNEL, 0, LED_OFF);
-        pwm.setPWM(LED2_CHANNEL, 0, LED_OFF);
-        pwm.setPWM(LED3_CHANNEL, 0, LED_OFF);
-        pwm.setPWM(LED4_CHANNEL, 0, LED_OFF);
+        pwm.setPWM(SERVO1_CHANNEL, 0, SERVO_CENTER);
+        pwm.setPWM(SERVO2_CHANNEL, 0, SERVO_CENTER);
+        pwm.setPWM(SERVO3_CHANNEL, 0, SERVO_CENTER);
+        pwm.setPWM(SERVO4_CHANNEL, 0, SERVO_CENTER);
 
         if (dir3 == 1) {
           if (millis() - autoTimer >= 3000) {
@@ -192,8 +177,6 @@ void taskControlLED(void* pvParameters) {
         break;
 
       case MODE_AUTO:
-        led5Blink = true;
-
         if (dir3 != 1) {
           currentMode = MODE_MANUAL;
           break;
@@ -204,41 +187,14 @@ void taskControlLED(void* pvParameters) {
           autoStep = (autoStep + 1) % 4;
         }
 
-        pwm.setPWM(LED1_CHANNEL, 0, (autoStep == 0) ? LED_ON : LED_OFF);
-        pwm.setPWM(LED2_CHANNEL, 0, (autoStep == 1) ? LED_ON : LED_OFF);
-        pwm.setPWM(LED3_CHANNEL, 0, (autoStep == 2) ? LED_ON : LED_OFF);
-        pwm.setPWM(LED4_CHANNEL, 0, (autoStep == 3) ? LED_ON : LED_OFF);
+        pwm.setPWM(SERVO1_CHANNEL, 0, (autoStep == 0) ? SERVO_MAX : SERVO_CENTER);
+        pwm.setPWM(SERVO2_CHANNEL, 0, (autoStep == 1) ? SERVO_MAX : SERVO_CENTER);
+        pwm.setPWM(SERVO3_CHANNEL, 0, (autoStep == 2) ? SERVO_MAX : SERVO_CENTER);
+        pwm.setPWM(SERVO4_CHANNEL, 0, (autoStep == 3) ? SERVO_MAX : SERVO_CENTER);
         break;
     }
 
     vTaskDelay(pdMS_TO_TICKS(20));
-  }
-}
-
-// ====================================================
-//  ฟังก์ชัน Task กระพริบ LED5 (taskFlashLED5)
-// ====================================================
-void taskFlashLED5(void* pvParameters) {
-  (void)pvParameters;
-
-  bool state = false;
-  unsigned long lastToggle = 0;
-
-  for (;;) {
-    if (led5Blink) {
-      if (millis() - lastToggle >= 1000) {
-        lastToggle = millis();
-        state = !state;
-        pwm.setPWM(LED5_CHANNEL, 0, state ? LED_ON : LED_OFF);
-      }
-    } else {
-      if (!state) {
-        state = true;
-        pwm.setPWM(LED5_CHANNEL, 0, LED_ON);
-      }
-    }
-
-    vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
 
