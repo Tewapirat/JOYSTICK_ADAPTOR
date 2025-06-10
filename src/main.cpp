@@ -29,6 +29,17 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 #define LED_ON  4095
 #define LED_OFF 0
 
+// ค่าพัลส์ขั้นต่ำและสูงสุดสำหรับ Servo (0-180 องศา)
+#define SERVO_MIN 100
+#define SERVO_MAX 500
+
+// ฟังก์ชันสั่งงาน Servo แบบง่าย โดยใส่องศาที่ต้องการ
+static void setServoAngle(uint8_t channel, uint8_t angle) {
+  angle = constrain(angle, 0, 180);
+  uint16_t pulse = map(angle, 0, 180, SERVO_MIN, SERVO_MAX);
+  pwm.setPWM(channel, 0, pulse);
+}
+
 // โหมดการทำงานของระบบ
 enum Mode {
   MODE_MANUAL,
@@ -68,9 +79,9 @@ void setup() {
   // เริ่มต้นไลบรารี IBus บน Serial2, packet length = 1
   ibus.begin(Serial2, 1);
 
-  // ---------- เริ่มต้นไลบรารี PCA9685 สำหรับ LED ----------
+  // ---------- เริ่มต้นไลบรารี PCA9685 สำหรับ Servo/LED ----------
   pwm.begin();
-  pwm.setPWMFreq(1000); // กำหนดความถี่สำหรับควบคุม LED
+  pwm.setPWMFreq(60); // ความถี่สำหรับควบคุม Servo
 
   // ตั้งค่า LED ทั้งหมดดับก่อนและเปิด LED5 ค้างสำหรับโหมด manual
   pwm.setPWM(LED1_CHANNEL, 0, LED_OFF);
@@ -162,10 +173,10 @@ void taskControlLED(void* pvParameters) {
         led5Blink = false;
         pwm.setPWM(LED5_CHANNEL, 0, LED_ON);
 
-        pwm.setPWM(LED1_CHANNEL, 0, (dir1 == 1) ? LED_ON : LED_OFF);
-        pwm.setPWM(LED2_CHANNEL, 0, (dir1 == -1) ? LED_ON : LED_OFF);
-        pwm.setPWM(LED3_CHANNEL, 0, (dir2 == 1) ? LED_ON : LED_OFF);
-        pwm.setPWM(LED4_CHANNEL, 0, (dir2 == -1) ? LED_ON : LED_OFF);
+        setServoAngle(LED1_CHANNEL, (dir1 == 1) ? 45 : 0);
+        setServoAngle(LED2_CHANNEL, (dir1 == -1) ? 45 : 0);
+        setServoAngle(LED3_CHANNEL, (dir2 == 1) ? 45 : 0);
+        setServoAngle(LED4_CHANNEL, (dir2 == -1) ? 45 : 0);
 
         if (dir3 == 1) {
           currentMode = MODE_AUTO_WAIT;
