@@ -36,6 +36,7 @@ enum Mode {
   MODE_AUTO_WAIT,
   MODE_AUTO
 };
+// create branch for current mode
 
 static Mode currentMode = MODE_MANUAL;
 
